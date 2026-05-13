@@ -91,6 +91,11 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   args+=(-e ANTHROPIC_API_KEY)
 fi
 
+# Forward GH_TOKEN so gh CLI is pre-authenticated inside the container
+if [ -n "${GH_TOKEN:-}" ]; then
+  args+=(-e GH_TOKEN)
+fi
+
 exec docker run "${args[@]}" "$IMAGE" \
   bash -lc '
     set -e
