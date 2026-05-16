@@ -108,7 +108,7 @@ workflow — assume the user has not read it.
 
 | File | Purpose |
 |---|---|
-| `.devcontainer/Dockerfile` | Node 20 + zsh + starship + git + gh + iptables + uv + Claude Code CLI |
+| `.devcontainer/Dockerfile` | Node 20 + zsh + starship + git + git-lfs + gh + iptables + uv + Claude Code CLI |
 | `.devcontainer/devcontainer.json` | Cursor/VS Code "Reopen in Container" config (builds the image) |
 | `.devcontainer/init-firewall.sh` | Blacklist iptables rules, runs at container start via NOPASSWD sudo |
 | `bin/yolo` | Terminal wrapper — symlinked into `~/.local/bin/yolo` |
@@ -133,13 +133,21 @@ Read-only bind mounts (kernel rejects writes from inside the container):
 - `~/.netrc` → wandb SDK auth
 - `~/.gitconfig` → commits carry the host user's name/email
 
+Conditional read-write bind mount (only when `$PWD/.git` is a *file*, i.e.
+a linked worktree from `git worktree add` or Orca): the main repo's `.git`
+directory is mounted at its exact host path inside the container. Without
+this, the worktree's `.git` pointer (e.g. `gitdir: /Users/.../worktrees/foo`)
+references a path outside the `/workspace` bind mount and every `git`
+command fails. The mount is read-write because commits need to update
+objects and refs in the shared `.git`.
+
 Synced at container start (host → container one-way, `mcpServers` only):
 
 - `mcpServers` block from `~/.claude.json` merged into
   `${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json` inside the container. Tokens
   travel; no other runtime state does.
 
-Env forwarded from host (only if set): `WANDB_API_KEY`, `ANTHROPIC_API_KEY`.
+Env forwarded from host (only if set): `WANDB_API_KEY`, `ANTHROPIC_API_KEY`, `GH_TOKEN`, `ORCA_WORKTREE_ID`. The Orca var is forwarded so Claude inside the container can detect it's in an Orca-managed worktree; other `ORCA_*` vars are skipped because they reference host-only paths or a hook port the container can't reach.
 
 All host-path mounts in `bin/yolo` are **conditional on the source file
 existing** (via `add_ro`). Forks without e.g. `.netrc` see no error — the
@@ -200,7 +208,9 @@ rebuilding:
   },
   "remoteEnv": {
     "WANDB_API_KEY": "${localEnv:WANDB_API_KEY}",
-    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+    "ORCA_WORKTREE_ID": "${localEnv:ORCA_WORKTREE_ID}"
   },
   "postStartCommand": "bash -c 'sudo /usr/local/bin/init-firewall.sh && if [ -f /yolo/host-claude.json ]; then target=\"${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json\"; host_mcps=$(jq -c \".mcpServers // {}\" /yolo/host-claude.json 2>/dev/null || echo \"{}\"); if [ -f \"$target\" ]; then jq --argjson m \"$host_mcps\" \".mcpServers = \\$m\" \"$target\" > \"$target.tmp\" && mv \"$target.tmp\" \"$target\"; else echo \"{\\\"mcpServers\\\": $host_mcps}\" | jq . > \"$target\"; fi; fi && if [ -f /workspace/pyproject.toml ] && [ ! -x /workspace/.venv/bin/python ]; then (cd /workspace && uv sync); fi'",
   "waitFor": "postStartCommand"
@@ -209,6 +219,13 @@ rebuilding:
 
 Then: **Cmd+Shift+P** → `Dev Containers: Reopen in Container`. Remove any
 mount whose host-side source doesn't exist for this user.
+
+**Worktree caveat.** The Dev Containers spec only supports static mounts,
+so the conditional worktree gitdir mount that `bin/yolo` adds when
+`$PWD/.git` is a file isn't replicated here. If you Reopen-in-Container
+from a linked worktree, `git` will be broken inside the container until
+you manually add a bind mount for the main repo's `.git` directory to
+the `mounts` array above. Use `bin/yolo` for worktree workflows.
 
 ### Over-the-wall flow
 
