@@ -49,8 +49,12 @@ ENV DEVCONTAINER=true
 # mounts yolo-uv-cache onto it — Docker auto-creates missing mount paths as root
 # and then seeds the empty named volume from that root-owned dir, locking it as
 # root forever. Pre-creating .cache is not enough; the /uv leaf must exist too.
-RUN mkdir -p /workspace /home/node/.claude /home/node/.cache/uv /home/node/.config && \
-  chown -R node:node /workspace /home/node/.claude /home/node/.cache /home/node/.config
+# Same applies to /home/node/.local/share/uv for the yolo-uv-data volume (managed
+# Python interpreters — without persistence, uv re-downloads CPython every run).
+RUN mkdir -p /workspace /home/node/.claude /home/node/.cache/uv \
+             /home/node/.local/share/uv /home/node/.config && \
+  chown -R node:node /workspace /home/node/.claude /home/node/.cache \
+                     /home/node/.local /home/node/.config
 
 # Host-style path symlink: settings.json often references the host path
 # (e.g. /Users/$HOST_USERNAME/.claude/statusline-command.sh). Create the symlink

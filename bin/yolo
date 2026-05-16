@@ -47,6 +47,7 @@ args=(
   -v "$PWD:/workspace" -w /workspace
   -v /workspace/.venv
   -v yolo-uv-cache:/home/node/.cache/uv
+  -v yolo-uv-data:/home/node/.local/share/uv
   -v yolo-claude-config:/home/node/.claude
   -v yolo-bashhistory:/commandhistory
   -v /run/host-services/ssh-auth.sock:/ssh-agent
